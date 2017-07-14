@@ -1,0 +1,55 @@
+#!/bin/bash
+if (($EUID != 0)); then
+  if [[ -t 1 ]]; then
+    sudo "$0" "$@"
+  else
+    exec 1>output_file
+    gksu "$0 $@"
+  fi
+  exit
+fi
+clear
+echo "Verificando que OpenVPN está instalado..."
+apt-get -qq install openvpn
+clear
+echo "Obteniendo datos...";
+passvpn=$(wget -qO- "http://www.vpnbook.com/freevpn" | grep -Po '(?<=Password: \<strong\>)[^<]*' | tail -1)
+echo $'vpnbook\n'$passvpn > /var/local/vpnbook_auth
+clear
+continue=true
+preurl="http://www.vpnbook.com/free-openvpn-account/VPNBook.com-OpenVPN-"
+post=".zip"
+opc=(0 "Euro1" "Euro2" "US1" "US2" "CA1" "DE1")
+opc2=(0 "tcp80" "tcp443" "udp53" "udp25000")
+while $continue; do
+  echo $'VPNs disponibles:\n\n1 - Euro1\n2 - Euro2\n3 - US1\n4 - US2\n5 - CA\n6 - DE\n'
+  read choice1
+  case $choice1 in
+    [1-6]* ) continue=false; break;;
+    * ) echo "Opción no valida.";;
+  esac
+done
+clear
+continue=true
+while $continue; do
+  echo $'Conexiones disponibles:\n\n1 - TCP 80\n2 - TCP 443\n3 - UDP 53\n4 - UDP 25000\n'
+  read choice2
+  case $choice2 in
+    [1-4]* ) continue=false; break;;
+    * ) echo "Opción no valida.";;
+  esac
+done
+upperchoice1=${opc[choice1]}
+lowerchoice1=$(echo ${opc[choice1]} | awk '{print tolower($0)}')
+url=$preurl$upperchoice1$post
+downfile="/var/local/"$upperchoice1$post
+ofile="/var/local/vpnbook-"$lowerchoice1"-"${opc2[choice2]}".ovpn"
+
+if [ ! -f $ofile ]; then
+	if [ ! -f $downfile ]; then
+		wget -qO $downfile "$url"
+	fi
+	unzip $downfile -d /var/local/
+fi
+clear
+openvpn --config $ofile --auth-user-pass /var/local/vpnbook_auth
